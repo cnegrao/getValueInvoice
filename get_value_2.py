@@ -19,7 +19,7 @@ if uploaded_file is not None:
     image = image.convert('L')  # Converter para escala de cinza
     image = image.filter(ImageFilter.SHARPEN)  # Aumentar nitidez
     enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(2)  # Aumentar contraste
+    image = enhancer.enhance(2)  # aAumentar contraste
 
     st.image(image, caption='Nota Fiscal Carregada e Processada',
              use_column_width=True)
