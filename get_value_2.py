@@ -24,7 +24,7 @@ if uploaded_file is not None:
     st.image(image, caption='Nota Fiscal Carregada e Processada',
              use_column_width=True)
 
-    # Realizar OCR na imagem com configuração personalizada
+    # Realizar OCR na imagem .com configuração personalizada
     custom_config = r'--oem 3 --psm 6'
     text = pytesseract.image_to_string(image, config=custom_config)
 
