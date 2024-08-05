@@ -80,11 +80,12 @@ if uploaded_xml is not None:
     valores = []
     for elem in root.iter():
         if elem.tag.endswith('BaseCalculo') or elem.tag.endswith('ValorLiquidoNfse') or elem.tag.endswith('ValorServicos'):
-            valores.append(elem.text)
+            valores.append((elem.tag, elem.text))
 
     if valores:
         st.subheader('Valores Encontrados no XML')
-        for valor in valores:
-            st.write(f'Valor encontrado: R$ {valor}')
+        for chave, valor in valores:
+            chave_limpa = chave.split('}')[-1]  # Remover namespace da chave
+            st.write(f'{chave_limpa}: R$ {valor}')
     else:
         st.error('Nenhum valor encontrado no XML.')
