@@ -60,15 +60,18 @@ def clean_text(text):
 
 
 def clean_cnpj(cnpj):
-    st.text("CNPJ original:")
-    for i, char in enumerate(cnpj):
-        st.text(f"Posição {i}: '{char}' - ASCII: {ord(char)}")
-
+    st.text("----------------------")
+    st.text("Entrando na função clean_cnpj")
+    st.text(f"CNPJ original: {cnpj}")
+    # Remover todos os espaços em branco
+    cnpj = cnpj.replace(" ", "")
     # Corrigir espaço específico entre "469" e ".445"
     cnpj = cnpj.replace("469 .", "469.")
 
     # Imprimir o CNPJ limpo
     st.text(f"CNPJ limpo: {cnpj}")
+    st.text("Saindo da função clean_cnpj")
+    st.text("----------------------")
     return cnpj
 
 # Função para extrair texto e aplicar PNL
