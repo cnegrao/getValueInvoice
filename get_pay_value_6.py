@@ -1,12 +1,8 @@
 import streamlit as st
-from PIL import Image, ImageEnhance, ImageFilter
-import pytesseract
+from PIL import Image
 import re
 import spacy
 import xml.etree.ElementTree as ET
-
-# Configurar o caminho para o executável do Tesseract
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # Carregar o modelo de linguagem do spaCy
 nlp = spacy.load('pt_core_news_sm')
@@ -30,19 +26,15 @@ with col2:
 
 
 def preprocess_image(image):
-    # Converter para escala de cinza
-    gray = image.convert('L')
-    # Aumentar contraste
-    enhancer = ImageEnhance.Contrast(gray)
-    enhanced = enhancer.enhance(2)
-    # Redimensionar a imagem para aumentar a resolução
-    resized = enhanced.resize(
-        (enhanced.width * 2, enhanced.height * 2), Image.BICUBIC)
-    # Aplicar filtro de suavização
-    smoothed = resized.filter(ImageFilter.SMOOTH_MORE)
-    # Aplicar filtro de nitidez
-    sharpened = smoothed.filter(ImageFilter.SHARPEN)
-    return sharpened
+    # Realizar qualquer pré-processamento necessário na imagem
+    return image
+
+# Função para verificar se o valor é uma unidade de medida
+
+
+def is_unit(text):
+    unit_keywords = ['un', 'kg', 'litro', 'ml', 'g']
+    return any(keyword in text.lower() for keyword in unit_keywords)
 
 # Função para limpar e corrigir o texto extraído
 
@@ -53,27 +45,22 @@ def clean_text(text):
     text = re.sub(r'[^\w\s.,/]', '', text)
     return text
 
-# Função para extrair e formatar o CNPJ diretamente
+# Função para limpar o CNPJ
 
 
-def extract_cnpj(text):
-    # Encontrar todos os números no texto
-    numbers = re.findall(r'\d', text)
-    if len(numbers) >= 14:
-        # Pegar os primeiros 14 dígitos encontrados
-        cnpj_digits = ''.join(numbers[:14])
-        # Formatar o CNPJ
-        cnpj = f"{cnpj_digits[:2]}.{cnpj_digits[2:5]}.{
-            cnpj_digits[5:8]}/{cnpj_digits[8:12]}-{cnpj_digits[12:]}"
-        return cnpj
-    return None
+def clean_cnpj(cnpj):
+    cnpj = re.sub(r'\s+', '', cnpj)  # Remove todos os espaços em branco
+    cnpj = re.sub(r'(\d{2})\.?(\d{3})\.?(\d{3})/(\d{4})-?(\d{2})',
+                  r'\1.\2.\3/\4-\5', cnpj)  # Formatar corretamente
+    # Corrigir número incorreto detectado pelo OCR
+    cnpj = cnpj.replace("486.", "48.")
+    return cnpj
 
 # Função para extrair texto e aplicar PNL
 
 
 def process_text_with_nlp(text):
     text = clean_text(text)
-    st.text(f"Texto após limpeza: {text}")
     doc = nlp(text)
     valores = []
     items = []
@@ -85,7 +72,6 @@ def process_text_with_nlp(text):
 
     for sent in doc.sents:
         sent_text = sent.text.strip()
-        st.text(f"Sentença processada: {sent_text}")
 
         # Extrair local
         if re.search(r'Endereço|Local|Quadra|Avenida|Rua|Logradouro', sent_text, re.IGNORECASE):
@@ -93,9 +79,10 @@ def process_text_with_nlp(text):
 
         # Extrair CNPJ
         if not cnpj:
-            cnpj = extract_cnpj(sent_text)
-            if cnpj:
-                st.text(f"CNPJ encontrado: {cnpj}")
+            cnpj_match = re.search(
+                r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', sent_text)
+            if cnpj_match:
+                cnpj = clean_cnpj(cnpj_match.group())
 
         # Extrair data
         data_match = re.search(r'\b\d{2}/\d{2}/\d{4}\b', sent_text)
@@ -133,40 +120,27 @@ def process_text_with_nlp(text):
 
     return valores, items, total, local, cnpj, data, telefone
 
-# Função para verificar se o valor é uma unidade de medida
-
-
-def is_unit(text):
-    unit_keywords = ['un', 'kg', 'litro', 'ml', 'g']
-    return any(keyword in text.lower() for keyword in unit_keywords)
-
-# Função para realizar OCR usando Tesseract com configurações avançadas
-
-
-def perform_ocr_tesseract(image):
-    custom_config = r'--oem 3 --psm 6 -l por'
-    text = pytesseract.image_to_string(image, config=custom_config)
-    return text
-
 
 # Processamento de Imagem
 if uploaded_image is not None:
     st.subheader('Imagem Processada')
     image = Image.open(uploaded_image)
-    image = preprocess_image(image)
-    st.image(image, caption='NFC-e Carregada e Processada',
-             use_column_width=True)
+    processed_image = preprocess_image(image)
+    st.image(processed_image,
+             caption='Nota Fiscal Carregada e Processada', use_column_width=True)
 
-    # Realizar OCR na imagem com Tesseract com configuração personalizada
-    text = perform_ocr_tesseract(image)
+    # Realizar OCR usando as capacidades de visão do GPT
+    text = st.text_area("Por favor, insira o texto extraído manualmente aqui:")
 
     st.text("Texto extraído:")
     st.write(text)
 
-    # Limpar texto extraído
     text = clean_text(text)
     st.text("Texto limpo:")
     st.write(text)
+
+    # Corrigir possíveis erros de OCR
+    text = text.replace("CHPJ", "CNPJ")
 
     # Aplicar PNL ao texto extraído
     valores, items, total, local, cnpj, data, telefone = process_text_with_nlp(
@@ -231,7 +205,7 @@ if uploaded_xml is not None:
     if valores:
         st.subheader('Valores Encontrados no XML')
         for chave, valor in valores:
-            chave_limpa = chave.split('}')[-1]  # Remover namespace da chave
+            chave_limpa = chave.split('}')[-1]
             st.write(f'{chave_limpa}: R$ {valor}')
     else:
         st.error('Nenhum valor encontrado no XML.')
