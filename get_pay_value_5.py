@@ -93,8 +93,11 @@ def process_text_with_nlp(text):
 
         # Extrair CNPJ
         if not cnpj:
-            cnpj = extract_cnpj(sent_text)
-            if cnpj:
+            cnpj_match = re.search(
+                r'(\d{2})[.\s]?(\d{3})[.\s]?(\d{3})[./\s]?(\d{4})[.\s]?(\d{2})', sent_text)
+            if cnpj_match:
+                cnpj = f"{cnpj_match.group(1)}.{cnpj_match.group(2)}.{
+                    cnpj_match.group(3)}/{cnpj_match.group(4)}-{cnpj_match.group(5)}"
                 st.text(f"CNPJ encontrado: {cnpj}")
 
         # Extrair data
