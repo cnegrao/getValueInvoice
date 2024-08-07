@@ -53,39 +53,60 @@ def clean_text(text):
     text = re.sub(r'[^\w\s.,/]', '', text)
     return text
 
-# Função para extrair e formatar o CNPJ diretamente
+# Função para extrair e limpar o CNPJ
 
 
 def extract_cnpj(text):
-    # Encontrar todos os números no texto
-    numbers = re.findall(r'\d', text)
-    if len(numbers) >= 14:
-        # Pegar os primeiros 14 dígitos encontrados
-        cnpj_digits = ''.join(numbers[:14])
-        # Formatar o CNPJ
-        cnpj = f"{cnpj_digits[:2]}.{cnpj_digits[2:5]}.{
-            cnpj_digits[5:8]}/{cnpj_digits[8:12]}-{cnpj_digits[12:]}"
-        return cnpj
+    cnpj_match = re.search(
+        r'\b(\d{2})[.\s]?(\d{3})[.\s]?(\d{3})[./\s]?\d{4}[.\s]?\d{2}\b', text)
+    if cnpj_match:
+        cnpj = f"{cnpj_match.group(1)}.{cnpj_match.group(2)}.{
+            cnpj_match.group(3)}/{cnpj_match.group(4)}-{cnpj_match.group(5)}"
+        return re.sub(r'\s+', '', cnpj)  # Remove espaços em branco
     return None
 
-# Função para extrair texto e aplicar PNL
+# Função para extrair e limpar o CPF
+
+
+def extract_cpf(text):
+    cpf_match = re.search(
+        r'\b(\d{3})[.\s]?(\d{3})[.\s]?(\d{3})[-\s]?(\d{2})\b', text)
+    if cpf_match:
+        cpf = f"{cpf_match.group(1)}.{cpf_match.group(2)}.{
+            cpf_match.group(3)}-{cpf_match.group(4)}"
+        return re.sub(r'\s+', '', cpf)  # Remove espaços em branco
+    return None
+
+# Função para verificar se o valor é uma unidade de medida
+
+
+def is_unit(text):
+    unit_keywords = ['un', 'kg', 'litro', 'ml', 'g']
+    return any(keyword in text.lower() for keyword in unit_keywords)
+
+# Função para processar o texto extraído
 
 
 def process_text_with_nlp(text):
     text = clean_text(text)
-    st.text(f"Texto após limpeza: {text}")
     doc = nlp(text)
     valores = []
     items = []
     total = None
     local = None
     cnpj = None
+    cpf = None
     data = None
     telefone = None
+    estabelecimento = None
 
     for sent in doc.sents:
         sent_text = sent.text.strip()
         st.text(f"Sentença processada: {sent_text}")
+
+        # Extrair estabelecimento
+        if not estabelecimento and re.search(r'^(.*?)(LTDA|ME|EPP|SA)\b', sent_text, re.IGNORECASE):
+            estabelecimento = sent_text
 
         # Extrair local
         if re.search(r'Endereço|Local|Quadra|Avenida|Rua|Logradouro', sent_text, re.IGNORECASE):
@@ -93,12 +114,23 @@ def process_text_with_nlp(text):
 
         # Extrair CNPJ
         if not cnpj:
-            cnpj_match = re.search(
-                r'(\d{2})[.\s]?(\d{3})[.\s]?(\d{3})[./\s]?(\d{4})[.\s]?(\d{2})', sent_text)
-            if cnpj_match:
-                cnpj = f"{cnpj_match.group(1)}.{cnpj_match.group(2)}.{
-                    cnpj_match.group(3)}/{cnpj_match.group(4)}-{cnpj_match.group(5)}"
-                st.text(f"CNPJ encontrado: {cnpj}")
+            cnpj_raw = re.search(
+                r'CNPJ[:\s]*(\d{2}[.\s]?\d{3}[.\s]?\d{3}[./\s]?\d{4}[.\s]?\d{2})', sent_text)
+            if cnpj_raw:
+                st.text(f"CNPJ bruto encontrado: {cnpj_raw.group(1)}")
+                cnpj = extract_cnpj(cnpj_raw.group(1))
+                if cnpj:
+                    st.text(f"CNPJ limpo encontrado: {cnpj}")
+
+        # Extrair CPF com a palavra-chave 'CPF'
+        if 'CPF' in sent_text:
+            cpf_raw = re.search(
+                r'CPF[:\s]*(\d{3}[.\s]?\d{3}[.\s]?\d{3}[-\s]?\d{2})', sent_text)
+            if cpf_raw:
+                st.text(f"CPF bruto encontrado: {cpf_raw.group(1)}")
+                cpf = extract_cpf(cpf_raw.group(1))
+                if cpf:
+                    st.text(f"CPF limpo encontrado: {cpf}")
 
         # Extrair data
         data_match = re.search(r'\b\d{2}/\d{2}/\d{4}\b', sent_text)
@@ -106,7 +138,8 @@ def process_text_with_nlp(text):
             data = data_match.group()
 
         # Extrair telefone
-        telefone_match = re.search(r'\(\d{2}\)\s*\d{4,5}-\d{4}', sent_text)
+        telefone_match = re.search(
+            r'Fone\s?[:\s]?\(?\d{2}\)?\s?\d{4,5}-\d{4}', sent_text)
         if telefone_match:
             telefone = telefone_match.group()
 
@@ -134,22 +167,7 @@ def process_text_with_nlp(text):
         if total_match:
             total = total_match.group(2)
 
-    return valores, items, total, local, cnpj, data, telefone
-
-# Função para verificar se o valor é uma unidade de medida
-
-
-def is_unit(text):
-    unit_keywords = ['un', 'kg', 'litro', 'ml', 'g']
-    return any(keyword in text.lower() for keyword in unit_keywords)
-
-# Função para realizar OCR usando Tesseract com configurações avançadas
-
-
-def perform_ocr_tesseract(image):
-    custom_config = r'--oem 3 --psm 6 -l por'
-    text = pytesseract.image_to_string(image, config=custom_config)
-    return text
+    return valores, items, total, local, cnpj, cpf, data, telefone, estabelecimento
 
 
 # Processamento de Imagem
@@ -160,20 +178,22 @@ if uploaded_image is not None:
     st.image(image, caption='NFC-e Carregada e Processada',
              use_column_width=True)
 
-    # Realizar OCR na imagem com Tesseract com configuração personalizada
-    text = perform_ocr_tesseract(image)
+    # Realizar OCR na imagem com configuração personalizada
+    custom_config = r'--oem 3 --psm 6 -l por'
+    text = pytesseract.image_to_string(image, config=custom_config)
 
     st.text("Texto extraído:")
     st.write(text)
 
-    # Limpar texto extraído
-    text = clean_text(text)
-    st.text("Texto limpo:")
-    st.write(text)
-
-    # Aplicar PNL ao texto extraído
-    valores, items, total, local, cnpj, data, telefone = process_text_with_nlp(
+    # Aplicar processamento de texto ao texto extraído
+    valores, items, total, local, cnpj, cpf, data, telefone, estabelecimento = process_text_with_nlp(
         text)
+
+    if estabelecimento:
+        st.subheader('Estabelecimento')
+        st.write(estabelecimento)
+    else:
+        st.error('Nenhum estabelecimento encontrado.')
 
     if local:
         st.subheader('Local')
@@ -186,6 +206,12 @@ if uploaded_image is not None:
         st.write(cnpj)
     else:
         st.error('Nenhum CNPJ encontrado.')
+
+    if cpf:
+        st.subheader('CPF')
+        st.write(cpf)
+    else:
+        st.error('Nenhum CPF encontrado.')
 
     if data:
         st.subheader('Data')
